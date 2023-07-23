@@ -19,6 +19,11 @@ struct mysql_backend {
 	bool auto_connect;
 	char *userquery; //MUST return 1 row, 1 column
 	char *aclquery; //MAY return n rows, 1 column, string
+    char *ssl_key;
+    char *ssl_cert;
+    char *ssl_ca;
+    char *ssl_capath;
+    char *ssl_cipher;
 };
 
 
@@ -62,20 +67,14 @@ void *be_mysql_init()
 		ssl_enabled = false;
 		_log(LOG_DEBUG, "SSL is disabled");
 	}
-
-	ssl_key = p_stab("ssl_key");	
-	ssl_cert = p_stab("ssl_cert");
-	ssl_ca = p_stab("ssl_ca");
-	ssl_capath = p_stab("ssl_capath");
-	ssl_cipher = p_stab("ssl_cipher");
 		
 	host = (host) ? host : strdup("localhost");
 	port = (!p) ? 3306 : atoi(p);
 
 	userquery = p_stab("userquery");
 
-	if (!userquery) {
-		_fatal("Mandatory option 'userquery' is missing");
+	if (!userquery && !ssl_enabled) {
+		_fatal("Mandatory option 'userquery' is missing and SSL is disabled.");
 		return (NULL);
 	}
 	if ((conf = (struct mysql_backend *)malloc(sizeof(struct mysql_backend))) == NULL)
@@ -92,7 +91,12 @@ void *be_mysql_init()
 	conf->aclquery = p_stab("aclquery");
 
 	if(ssl_enabled){
-		mysql_ssl_set(conf->mysql, ssl_key, ssl_cert, ssl_ca, ssl_capath, ssl_cipher);
+		// mysql_ssl_set(conf->mysql, ssl_key, ssl_cert, ssl_ca, ssl_capath, ssl_cipher);
+        conf->ssl_key = p_stab("ssl_key");	
+        conf->ssl_cert = p_stab("ssl_cert");
+        conf->ssl_ca = p_stab("ssl_ca");
+        conf->ssl_capath = p_stab("ssl_capath");
+        conf->ssl_cipher = p_stab("ssl_cipher");
 	}
 	
 	opt_flag = get_bool("mysql_auto_connect", "true");
@@ -125,6 +129,16 @@ void be_mysql_destroy(void *handle)
 			free(conf->userquery);
 		if (conf->aclquery)
 			free(conf->aclquery);
+        if(conf->ssl_key)
+            free(conf->ssl_key);
+        if(conf->ssl_cert)
+            free(conf->ssl_cert);
+        if(conf->ssl_ca)
+            free(conf->ssl_ca);
+        if(conf->ssl_capath)
+            free(conf->ssl_capath);
+        if(conf->ssl_cipher)
+            free(conf->ssl_cipher);
 		free(conf);
 	}
 }
@@ -151,6 +165,12 @@ static bool auto_connect(struct mysql_backend *conf)
 		return true;
 	}
 	return false;
+}
+
+//select from sslinfo where 
+int be_mysql_getsslinfo(void *)
+{
+
 }
 
 int be_mysql_getuser(void *handle, const char *username, const char *password, char **phash, const char *clientid)

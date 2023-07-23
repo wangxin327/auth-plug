@@ -25,18 +25,7 @@
 #include "backends.h"
 #include "envs.h"
 
-#include "be-psk.h"
-#include "be-cdb.h"
 #include "be-mysql.h"
-#include "be-sqlite.h"
-#include "be-redis.h"
-#include "be-memcached.h"
-#include "be-postgres.h"
-#include "be-ldap.h"
-#include "be-http.h"
-#include "be-jwt.h"
-#include "be-mongo.h"
-#include "be-files.h"
 
 #include "userdata.h"
 #include "cache.h"
@@ -85,6 +74,7 @@ int mosquitto_auth_plugin_init(void **userdata, struct mosquitto_auth_opt *auth_
 	struct userdata *ud;
 	int ret = MOSQ_ERR_SUCCESS;
 	int nord;
+    
 	struct backend_p **bep;
 #ifdef BE_PSK
 	struct backend_p **pskbep;
@@ -173,28 +163,6 @@ int mosquitto_auth_plugin_init(void **userdata, struct mosquitto_auth_opt *auth_
 	bep = ud->be_list;
 	nord = 0;
 
-#if BE_PSK
-	/*
-	 * Force adding PSK back-end, which must be indexed at 0
-	 * The PSK back-end is a little special in that it will use
-	 * a database from another back-end (e.g. mysql or sqlite)
-	 * for authorization.
-	 */
-
-	if ((psk_database = p_stab("psk_database")) == NULL) {
-		_fatal("PSK is configured so psk_database needs to be set");
-	}
-
-	pskbep = bep;
-	*pskbep = (struct backend_p *)malloc(sizeof(struct backend_p));
-	memset(*pskbep, 0, sizeof(struct backend_p));
-	(*pskbep)->name = strdup("psk");
-
-	bep = pskbep;
-	bep++;
-	nord++;
-#endif /* BE_PSK */
-
 	for (q = strsep(&p, ","); q && *q && (nord < NBACKENDS); q = strsep(&p, ",")) {
 		int found = 0;
 #if BE_MYSQL
@@ -215,206 +183,6 @@ int mosquitto_auth_plugin_init(void **userdata, struct mosquitto_auth_opt *auth_
 			PSKSETUP;
 		}
 #endif
-
-#if BE_POSTGRES
-		if (!strcmp(q, "postgres")) {
-			*bep = (struct backend_p *)malloc(sizeof(struct backend_p));
-			memset(*bep, 0, sizeof(struct backend_p));
-			(*bep)->name = strdup("postgres");
-			(*bep)->conf = be_pg_init();
-			if ((*bep)->conf == NULL) {
-				_fatal("%s init returns NULL", q);
-			}
-			(*bep)->kill = be_pg_destroy;
-			(*bep)->getuser = be_pg_getuser;
-			(*bep)->superuser = be_pg_superuser;
-			(*bep)->aclcheck = be_pg_aclcheck;
-			found = 1;
-			ud->fallback_be = ud->fallback_be == -1 ? nord : ud->fallback_be;
-			PSKSETUP;
-		}
-#endif
-
-#if BE_LDAP
-		if (!strcmp(q, "ldap")) {
-			*bep = (struct backend_p *)malloc(sizeof(struct backend_p));
-			memset(*bep, 0, sizeof(struct backend_p));
-			(*bep)->name = strdup("ldap");
-			(*bep)->conf = be_ldap_init();
-			if ((*bep)->conf == NULL) {
-				_fatal("%s init returns NULL", q);
-			}
-			(*bep)->kill =  be_ldap_destroy;
-			(*bep)->getuser =  be_ldap_getuser;
-			(*bep)->superuser =  be_ldap_superuser;
-			(*bep)->aclcheck =  be_ldap_aclcheck;
-			found = 1;
-			ud->fallback_be = ud->fallback_be == -1 ? nord : ud->fallback_be;
-			PSKSETUP;
-		}
-#endif
-
-#if BE_CDB
-		if (!strcmp(q, "cdb")) {
-			*bep = (struct backend_p *)malloc(sizeof(struct backend_p));
-			memset(*bep, 0, sizeof(struct backend_p));
-			(*bep)->name = strdup("cdb");
-			(*bep)->conf = be_cdb_init();
-			if ((*bep)->conf == NULL) {
-				_fatal("%s init returns NULL", q);
-			}
-			(*bep)->kill =  be_cdb_destroy;
-			(*bep)->getuser =  be_cdb_getuser;
-			(*bep)->superuser =  be_cdb_superuser;
-			(*bep)->aclcheck =  be_cdb_aclcheck;
-			found = 1;
-			ud->fallback_be = ud->fallback_be == -1 ? nord : ud->fallback_be;
-			PSKSETUP;
-		}
-#endif
-
-#if BE_SQLITE
-		if (!strcmp(q, "sqlite")) {
-			*bep = (struct backend_p *)malloc(sizeof(struct backend_p));
-			memset(*bep, 0, sizeof(struct backend_p));
-			(*bep)->name = strdup("sqlite");
-			(*bep)->conf = be_sqlite_init();
-			if ((*bep)->conf == NULL) {
-				_fatal("%s init returns NULL", q);
-			}
-			(*bep)->kill =  be_sqlite_destroy;
-			(*bep)->getuser =  be_sqlite_getuser;
-			(*bep)->superuser =  be_sqlite_superuser;
-			(*bep)->aclcheck =  be_sqlite_aclcheck;
-			found = 1;
-			ud->fallback_be = ud->fallback_be == -1 ? nord : ud->fallback_be;
-			PSKSETUP;
-		}
-#endif
-
-#if BE_REDIS
-		if (!strcmp(q, "redis")) {
-			*bep = (struct backend_p *)malloc(sizeof(struct backend_p));
-			memset(*bep, 0, sizeof(struct backend_p));
-			(*bep)->name = strdup("redis");
-			(*bep)->conf = be_redis_init();
-			if ((*bep)->conf == NULL) {
-				_fatal("%s init returns NULL", q);
-			}
-			(*bep)->kill =  be_redis_destroy;
-			(*bep)->getuser =  be_redis_getuser;
-			(*bep)->superuser =  be_redis_superuser;
-			(*bep)->aclcheck =  be_redis_aclcheck;
-			found = 1;
-			ud->fallback_be = ud->fallback_be == -1 ? nord : ud->fallback_be;
-			PSKSETUP;
-		}
-#endif
-
-#if BE_MEMCACHED
-		if (!strcmp(q, "memcached")) {
-			*bep = (struct backend_p *)malloc(sizeof(struct backend_p));
-			memset(*bep, 0, sizeof(struct backend_p));
-			(*bep)->name = strdup("memcached");
-			(*bep)->conf = be_memcached_init();
-			if ((*bep)->conf == NULL) {
-				_fatal("%s init returns NULL", q);
-			}
-			(*bep)->kill =  be_memcached_destroy;
-			(*bep)->getuser =  be_memcached_getuser;
-			(*bep)->superuser =  be_memcached_superuser;
-			(*bep)->aclcheck =  be_memcached_aclcheck;
-			found = 1;
-			ud->fallback_be = ud->fallback_be == -1 ? nord : ud->fallback_be;
-			PSKSETUP;
-		}
-#endif
-
-#if BE_HTTP
-		if (!strcmp(q, "http")) {
-			*bep = (struct backend_p *)malloc(sizeof(struct backend_p));
-			memset(*bep, 0, sizeof(struct backend_p));
-			(*bep)->name = strdup("http");
-			(*bep)->conf = be_http_init();
-			if ((*bep)->conf == NULL) {
-				_fatal("%s init returns NULL", q);
-			}
-			(*bep)->kill =  be_http_destroy;
-			(*bep)->getuser =  be_http_getuser;
-			(*bep)->superuser =  be_http_superuser;
-			(*bep)->aclcheck =  be_http_aclcheck;
-			found = 1;
-			ud->fallback_be = ud->fallback_be == -1 ? nord : ud->fallback_be;
-			PSKSETUP;
-		}
-#endif
-
-#if BE_JWT
-		if (!strcmp(q, "jwt")) {
-			*bep = (struct backend_p *)malloc(sizeof(struct backend_p));
-			memset(*bep, 0, sizeof(struct backend_p));
-			(*bep)->name = strdup("jwt");
-			(*bep)->conf = be_jwt_init();
-			if ((*bep)->conf == NULL) {
-				_fatal("%s init returns NULL", q);
-			}
-			(*bep)->kill =  be_jwt_destroy;
-			(*bep)->getuser =  be_jwt_getuser;
-			(*bep)->superuser =  be_jwt_superuser;
-			(*bep)->aclcheck =  be_jwt_aclcheck;
-			found = 1;
-			ud->fallback_be = ud->fallback_be == -1 ? nord : ud->fallback_be;
-			PSKSETUP;
-		}
-#endif
-
-#if BE_MONGO
-		if (!strcmp(q, "mongo")) {
-			*bep = (struct backend_p *)malloc(sizeof(struct backend_p));
-			memset(*bep, 0, sizeof(struct backend_p));
-			(*bep)->name = strdup("mongo");
-			(*bep)->conf = be_mongo_init();
-			if ((*bep)->conf == NULL) {
-				_fatal("%s init returns NULL", q);
-			}
-			(*bep)->kill =  be_mongo_destroy;
-			(*bep)->getuser =  be_mongo_getuser;
-			(*bep)->superuser =  be_mongo_superuser;
-			(*bep)->aclcheck =  be_mongo_aclcheck;
-			found = 1;
-			PSKSETUP;
-		}
-#endif
-
-#if BE_FILES
-		if (!strcmp(q, "files")) {
-			*bep = (struct backend_p *)malloc(sizeof(struct backend_p));
-			memset(*bep, 0, sizeof(struct backend_p));
-			(*bep)->name = strdup("files");
-			(*bep)->conf = be_files_init();
-			if ((*bep)->conf == NULL) {
-				_fatal("%s init returns NULL", q);
-			}
-			(*bep)->kill =  be_files_destroy;
-			(*bep)->getuser =  be_files_getuser;
-			(*bep)->superuser =  be_files_superuser;
-			(*bep)->aclcheck =  be_files_aclcheck;
-			found = 1;
-			PSKSETUP;
-		}
-#endif
-		if (!found) {
-			_fatal("ERROR: configured back-end `%s' is not compiled in this plugin", q);
-		}
-
-		ud->be_list[++nord] = NULL;
-		bep++;
-	}
-
-	free(_p);
-
-	return (ret);
-}
 
 int mosquitto_auth_plugin_cleanup(void *userdata, struct mosquitto_auth_opt *auth_opts, int auth_opt_count)
 {
